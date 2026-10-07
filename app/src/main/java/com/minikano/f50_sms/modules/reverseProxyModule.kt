@@ -1,6 +1,9 @@
 package com.minikano.f50_sms.modules
 
+import android.content.Context
+import com.minikano.f50_sms.modules.u20.u20CompatModule
 import com.minikano.f50_sms.utils.KanoLog
+import com.minikano.f50_sms.utils.U20PlatformAdapter
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -26,7 +29,12 @@ private data class ProxyResult(
 )
 
 // 反向代理官方后端
-fun Route.reverseProxyModule(targetServerIP: String) {
+fun Route.reverseProxyModule(context: Context, targetServerIP: String) {
+    if (U20PlatformAdapter.isNewU20()) {
+        u20CompatModule(context)
+        return
+    }
+
     // 转发到原厂web后端
     route("/api/goform/{...}") {
         KanoLog.d(TAG, "开始反向代理资源...")

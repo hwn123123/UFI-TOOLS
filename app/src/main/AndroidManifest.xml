@@ -18,12 +18,16 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.READ_SMS"/>
+    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+    <uses-permission android:name="android.permission.SEND_SMS"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
     <queries>
         <package android:name="com.zte.web" />
     </queries>
     <application
         android:usesCleartextTraffic="true"
+        android:forceQueryable="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -61,6 +65,29 @@
             android:name=".ADBService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
+        <!--
+            The MN901 image omits ContactsProvider, while its bundled dialer
+            still requires these Android authorities during startup. The U20
+            adapters expose empty, permission-protected compatibility datasets.
+        -->
+        <provider
+            android:name=".modules.u20.U20VoicemailCompatProvider"
+            android:authorities="com.android.voicemail"
+            android:exported="true"
+            android:readPermission="com.android.voicemail.permission.READ_VOICEMAIL"
+            android:writePermission="com.android.voicemail.permission.WRITE_VOICEMAIL" />
+        <provider
+            android:name=".modules.u20.U20ContactsCompatProvider"
+            android:authorities="contacts;com.android.contacts"
+            android:exported="true"
+            android:readPermission="android.permission.READ_CONTACTS"
+            android:writePermission="android.permission.WRITE_CONTACTS" />
+        <provider
+            android:name=".modules.u20.U20CallLogCompatProvider"
+            android:authorities="call_log"
+            android:exported="true"
+            android:readPermission="android.permission.READ_CALL_LOG"
+            android:writePermission="android.permission.WRITE_CALL_LOG" />
     </application>
 
 </manifest>

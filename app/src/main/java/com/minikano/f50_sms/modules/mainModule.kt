@@ -38,7 +38,7 @@ fun Application.mainModule(context: Context, proxyServerIp: String) {
 
             anyProxyModule(context)
 
-            reverseProxyModule(targetServerIP)
+            reverseProxyModule(context, targetServerIP)
 
             baseDeviceInfoModule(context)
 

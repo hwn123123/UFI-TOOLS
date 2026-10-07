@@ -165,7 +165,8 @@ function kano_formatTime(seconds) {
 }
 
 function formatBytes(bytes, needTrim = false) {
-    if (bytes === 0) return ' 0.00 B';
+    bytes = Number(bytes)
+    if (!Number.isFinite(bytes) || bytes <= 0) return ' 0.00 B';
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     let size = (bytes / Math.pow(1024, i)).toFixed(2)

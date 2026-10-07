@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="icon" type="image/svg+xml" href="/favicon.webp">
@@ -20,6 +20,7 @@
     </script>
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="/style/style.css">
+    <link rel="stylesheet" href="/style/u20-dashboard.css">
     <script src="/script/polyfill.min.js"></script>
     <script src="/script/requests.js"></script>
     <script src="/script/lib/crypto.js"></script>
@@ -29,12 +30,12 @@
 
     <script>
         const baseSize = 14;
-        const minScale = 0.9;
-        const maxScale = 1.2;
+        const minScale = 0.86;
+        const maxScale = 1;
 
         function setRem() {
             const width = document.documentElement.clientWidth;
-            let scale = width / 375;
+            let scale = width / 390;
             // 限制缩放范围
             if (scale < minScale) scale = minScale;
             if (scale > maxScale) scale = maxScale;
@@ -218,9 +219,7 @@
                     <div class="collapse_box">
                         <div style="overflow: auto;position: relative">
                             <div class="title" style="margin-bottom: 6px;">
-                                <button id="DICTIONARY" class="btn" style="padding: 4px;margin-left: 0;"
-                                    data-i18n="manage_fields">管理字段</button>
-                                <button class="btn REFRESH_BTN" style="padding: 4px;margin-left: 10px;"
+                                <button class="btn REFRESH_BTN" style="padding: 4px;margin-left: 0;"
                                     data-i18n="stop_refresh">停止刷新</button>
                                 <select class="select" id="refreshRateSelect" onchange="changeRefreshRate(event)"
                                     style="padding: 3px;margin-left: 10px;">
@@ -469,54 +468,20 @@
             <!-- 登录模态框 -->
             <div class="mask" id="tokenModal" style="display: none">
                 <div class="modal" style="width: 90vw;max-width: 450px;">
-                    <div class="title" style="display: flex;justify-content: space-between;">
-                        <span data-i18n="token_title">请输入口令与密码</span>
-                        <button style="border-radius: 50%;" onclick="showLoginHelp()">?</button>
-                    </div>
-                    <div class="title" style="margin: 10px 0;">
-                        <p style="font-size: 12px;margin: 0;">
-                            <i>
-                                <span data-i18n="token_note_1">注：请填入口令和密码</span><br>
-                                <span data-i18n="token_note_2">第一个为UFI-TOOLS登录口令(默认为admin)</span><br>
-                                <span data-i18n="token_note_3">第二个为某兴后台的管理密码(在机器背面可以找到)</span><br>
-                                <span data-i18n="token_note_4">如果出现密码错误，请换一个登录方式</span>
-                            </i>
-                        </p>
-                    </div>
+                    <div class="title"><span>设备登录</span></div>
+                    <p class="u20-login-note">使用设备管理账号登录，原厂默认账号和密码均为 admin。</p>
                     <form class="content"
                         style="padding: 0px 4px 0 4px;display: flex;flex-direction: column;align-items: center;">
-                        <input type="text" name="username" autocomplete="username" style="display: none;">
-                        <div style="display: flex;width: 100%;">
-                            <select style="width: 100%;margin-bottom: 10px;" class="select" name="" value="1"
-                                id="login_method">
-                                <option value="1" data-i18n="login_method_1">登录方式1</option>
-                                <option value="0" data-i18n="login_method_2">登录方式2</option>
-                            </select>
-                            <button type="button" data-i18n="no_pass_login_btn"
-                                onclick="event.preventDefault();noPassLogin()"
-                                style="flex-shrink: 0;margin: 4px 2px;">免密码登录</button>
-                        </div>
-                        <div id="TOKEN_LABEL" style="align-self: start;margin-bottom: 10px;font-size: .85rem;"
-                            data-i18n="token_div_1">UFI 口令：</div>
-                        <div style="display: flex;width: 100%;margin-bottom: 10px;gap: 4px;">
-                            <input name="backend_password" autocomplete="current-password" id="TOKEN" type="password"
-                                data-i18n-placeholder="token_placeholder_token" placeholder="口令(UFI-TOOLS后台应用中查看)"
-                                style="width: 100%;text-indent: .5em;height: 30px;">
-                            <button type="button" onclick="switchPassInputShow(event,'#TOKEN')"
-                                style="background: none;;flex-shrink: 0;display: flex;align-items: center;justify-content: center;"><svg
-                                    style="pointer-events: none;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                    width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
-                                    stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
-                                    <circle cx="12" cy="12" r="3" />
-                                </svg></button>
-                        </div>
-                        <div style="align-self: start;margin-bottom: 10px;font-size: .85rem;" id="token_div_label2"
-                            data-i18n="token_div_2">
-                            某兴后台密码：</div>
-                        <div style="display: flex;width: 100%;margin-bottom: 10px;gap: 4px;" id="PWD_BLK">
-                            <input name="web_password" autocomplete="new-password" id="PWDINPUT" type="password"
-                                data-i18n-placeholder="token_placeholder_pwd" placeholder="官方后台的管理密码"
+                        <input id="TOKEN" type="hidden" value="admin">
+                        <input id="login_method" type="hidden" value="0">
+                        <label class="u20-login-field" for="U20_USERNAME"><span>账号</span>
+                            <input name="username" autocomplete="username" id="U20_USERNAME" type="text"
+                                value="admin" inputmode="text" autocapitalize="none" spellcheck="false">
+                        </label>
+                        <label class="u20-login-field" for="PWDINPUT"><span>密码</span></label>
+                        <div class="u20-login-password" id="PWD_BLK">
+                            <input name="web_password" autocomplete="current-password" id="PWDINPUT" type="password"
+                                placeholder="请输入设备管理密码（默认 admin）"
                                 style="width: 100%;text-indent: .5em; height: 30px;">
                             <button type="button" onclick="switchPassInputShow(event,'#PWDINPUT')"
                                 style="background: none;flex-shrink: 0;display: flex;align-items: center;justify-content: center;"><svg
@@ -527,15 +492,9 @@
                                     <circle cx="12" cy="12" r="3" />
                                 </svg></button>
                         </div>
-                        <label class="user_select_none"
-                            style="align-self: start;margin-bottom: 10px;margin-top: 2px;font-size: .8rem;display: flex;align-items: center;justify-content: center;">
-                            <span data-i18n="remember-me">记住我</span>
-                            <input type="checkbox" style="margin: 0 6px;" id="loginRememberMe">
-                        </label>
                     </form>
                     <div class="btn" style="text-align: right;">
                         <button data-i18n="confirm_btn" onclick="onTokenConfirm()">确认</button>
-                        <button data-i18n="cancel_btn" onclick="closeModal('#tokenModal')">取消</button>
                     </div>
                 </div>
             </div>
@@ -2247,50 +2206,18 @@
                 </div>
             </div>
 
-            <!-- ❤️ -->
-            <div class="mask" id="payModal" style="display: none" onclick="handleClosePayModal(event)">
+            <div class="mask" id="payModal" style="display: none">
                 <div class="modal">
-                    <div class="title" style="width: 100%;display: flex;justify-content:space-between;"><span
-                            data-i18n="pay_title">打赏作者/群组链接</span>
-                        <button type="button" onclick="onClosePayModal()" data-i18n="pay_btn_dismiss"
-                            style="margin-right: 15px;">不再显示</button>
-                    </div>
-                    <div class="title"
-                        style="display: flex;align-items: center;margin-top: 10px;font-size: 12px;margin-bottom: 10px;">
-                        <div>
-                            <p style="margin: 0; font-style: italic;" data-i18n="pay_tip_1">开发不易，打赏随意～</p>
-                            <p style="margin: 0; font-style: italic;" data-i18n="pay_tip_2">长按赞赏码可保存为图片</p>
-                        </div>
-                    </div>
-                    <div class="title" style="font-size: 14px;display: flex;flex-direction: column;">
-                        <button style="width: 100%;"><a href="https://t.me/ufi_tools_chat" target="_blank"
-                                data-i18n="tg_group">点我加入TG群组:
-                                @ufi_tools_chat</a></button>
-                    </div>
-                    <div class="donate_content"
-                        style="display: flex; flex-direction: row; justify-content: space-between; padding: 15px; width: 70vw; max-width: 400px; flex-wrap: wrap;">
-
-                        <a href="https://api.kanokano.cn/pay/zsm.png" target="_blank"
-                            style="display:flex;width: 48%; height: auto; border-radius: 20px;">
-                            <img src="https://api.kanokano.cn/pay/zsm.png"
-                                style="flex:1;width: 100%; height: auto;border-radius: 20px;" alt=""
-                                onerror="this.onerror=null; this.src='/img/zsm.png'">
-                        </a>
-                        <a href="https://api.kanokano.cn/pay/group.png" target="_blank"
-                            style="display:flex;width: 48%; height: auto; border-radius: 20px;">
-                            <img src="https://api.kanokano.cn/pay/group.png"
-                                style="flex:1;width: 100%; height: auto;border-radius: 20px;" alt=""
-                                onerror="this.onerror=null; this.src='/img/group.png'">
-                        </a>
-
+                    <div class="title">支持开发</div>
+                    <div class="donate_content">
+                        <img src="/img/ningge-wechat-pay.png" style="display:block;width:min(100%,420px);height:auto;margin:auto;border-radius:14px;" alt="ningge 微信赞赏码">
                     </div>
                 </div>
             </div>
         </div>
     </div>
     <div class="footer">
-        <p>Made by <a href="https://github.com/kanoqwq/UFI-TOOLS" target="_blank">MiniKano</a> with love ❤️&nbsp;<a
-                href="javascript:;" onclick="showModal('#payModal')" data-i18n="pay_title">打赏作者</a></p>
+        <p>Made by <strong>ningge</strong> with love ❤️</p>
     </div>
 
     <div class="toolbar">
@@ -2316,6 +2243,7 @@
     <script src="/script/theme.js"></script>
     <script src="/script/charts.js"></script>
     <script src="/script/main.js"></script>
+    <script src="/script/u20-dashboard.js"></script>
 </body>
 
 </html>

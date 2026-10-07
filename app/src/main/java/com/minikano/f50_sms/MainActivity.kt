@@ -50,6 +50,7 @@ import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.utils.KanoUtils
 import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.utils.UniqueDeviceIDManager
+import com.minikano.f50_sms.utils.U20PlatformAdapter
 import com.minikano.f50_sms.utils.WakeLock
 import com.minikano.f50_sms.utils.getBooleanCompat
 import kotlinx.coroutines.Dispatchers
@@ -457,6 +458,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun runADB() {
+        if (U20PlatformAdapter.isNewU20()) {
+            KanoLog.d("UFI_TOOLS_U20", "skip legacy Activity ADB activation; native adbd is used")
+            return
+        }
         //网络adb
         //adb setprop service.adb.tcp.port 5555
         Thread {

@@ -10,6 +10,7 @@ import com.minikano.f50_sms.utils.KanoUtils.Companion.sendShellCmd
 import com.minikano.f50_sms.utils.RootShell
 import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.utils.SmbThrottledRunner
+import com.minikano.f50_sms.utils.U20PlatformAdapter
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -40,6 +41,31 @@ fun Route.advancedToolsModule(context: Context, targetServerIP: String) {
                 ?: throw Exception("缺少 query 参数 enable")
 
             KanoLog.d(TAG, "enable 传入参数：$enabled")
+
+            if (U20PlatformAdapter.isNewU20()) {
+                val result = if (enabled == "1") {
+                    U20PlatformAdapter.ensureRootBackend(context)
+                } else {
+                    U20PlatformAdapter.stopRootBackend(context)
+                }
+
+                result.fold(
+                    onSuccess = {
+                        call.respondText(
+                            """{"result":"$it"}""",
+                            ContentType.Application.Json
+                        )
+                    },
+                    onFailure = {
+                        call.respondText(
+                            """{"error":"${it.message}"}""",
+                            ContentType.Application.Json,
+                            HttpStatusCode.InternalServerError
+                        )
+                    }
+                )
+                return@get
+            }
 
             // 复制依赖文件
             val outFileAdb = KanoUtils.copyFileToFilesDir(context, "shell/adb")

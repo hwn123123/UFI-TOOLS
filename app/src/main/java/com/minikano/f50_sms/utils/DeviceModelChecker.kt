@@ -10,6 +10,11 @@ object DeviceModelChecker {
     }
 
     fun checkIsNotUFI(context: Context):Boolean{
+        if (U20PlatformAdapter.isNewU20()) {
+            Log.d("UFI_TOOLS_LOG_devcheck", "检测到 FM_U20/MN901，使用新版 U20 适配层")
+            return false
+        }
+
         val isUFI_0 = KanoUtils.isAppInstalled(context,"com.zte.web")
         val isUFI = ShellKano.runShellCommand("pm list package")
         Log.d("UFI_TOOLS_LOG_devcheck", "isUFI_0：${isUFI_0},has com.zte.web? :${isUFI?.contains("com.zte.web")} ")

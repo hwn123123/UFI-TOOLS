@@ -618,6 +618,14 @@ class ShellKano {
 
 
         fun runADB(context: Context) {
+            // FM_U20 already runs the stock adbd on port 5555. Android 13 does
+            // not allow the app to execute its private copy of adb, and the
+            // legacy F50 activation path otherwise retries that binary many
+            // times during every boot.
+            if (U20PlatformAdapter.isNewU20()) {
+                KanoLog.d("UFI_TOOLS_U20", "skip legacy F50 ADB activation; native adbd is used")
+                return
+            }
             //网络adb
             //adb setprop service.adb.tcp.port 5555
             Thread {

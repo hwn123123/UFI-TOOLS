@@ -3,7 +3,6 @@ package com.minikano.f50_sms.modules.at
 import android.content.Context
 import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.utils.KanoUtils
-import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.modules.BASE_TAG
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -39,16 +38,9 @@ fun Route.atModule(context: Context) {
                 throw Exception("解析失败，AT指令需要以 “AT” 开头")
             }
 
-            val outFileAt = KanoUtils.copyFileToFilesDir(context, "shell/sendat")
-                ?: throw Exception("复制 sendat 到 filesDir 失败")
-            outFileAt.setExecutable(true)
-
-            val atCommand = "${outFileAt.absolutePath} -n $slot -c '${command.trim()}'"
-            val result = ShellKano.runShellCommand(atCommand, true)
-                ?: throw Exception("AT 指令没有输出")
+            val result = KanoUtils.runAT(context, command, slot)
 
             var res = result
-                .replace("\"", "\\\"") // 转义引号
                 .replace("\n", "")
                 .replace("\r", "")
                 .trimStart()
@@ -60,11 +52,11 @@ fun Route.atModule(context: Context) {
                 res = res.removePrefix(",").trimStart()
             }
 
-            KanoLog.d(TAG, "AT_cmd：$atCommand")
+            KanoLog.d(TAG, "AT_cmd：$command")
             KanoLog.d(TAG, "AT_result：$res")
 
             call.respondText(
-                """{"result":"$res"}""",
+                JSONObject().put("result", res).toString(),
                 ContentType.Application.Json
             )
 
@@ -72,7 +64,7 @@ fun Route.atModule(context: Context) {
             KanoLog.d(TAG, "AT指令执行错误：${e.message}")
 
             call.respondText(
-                """{"error":"AT指令执行错误：${e.message}"}""",
+                JSONObject().put("error", "AT指令执行错误：${e.message}").toString(),
                 ContentType.Application.Json,
                 HttpStatusCode.InternalServerError
             )
@@ -88,13 +80,19 @@ fun Route.atModule(context: Context) {
                 if (raw.contains("ERROR", ignoreCase = true) || !raw.contains("+SP5GCMDS:", ignoreCase = true)) {
                     throw IllegalStateException("查询 NR 支持频段失败：$raw")
                 }
-                raw
+                val parsed = raw
                     .substringBefore("OK")
                     .substringAfter(":", "")
                     .split(",")
                     .drop(1) // 第一个字段是命令名：get nr support_band
                     .mapNotNull { it.trim().trim('"', '\\').toIntOrNull() }
-                    .distinct()
+                // MN901 返回的第一个数字是后续频段数量，不是 N6。
+                val withoutCount = if (parsed.isNotEmpty() && parsed.first() == parsed.size - 1) {
+                    parsed.drop(1)
+                } else {
+                    parsed
+                }
+                withoutCount.distinct()
             }
             val bandsJson = JSONArray().apply {
                 bands.forEach(::put)

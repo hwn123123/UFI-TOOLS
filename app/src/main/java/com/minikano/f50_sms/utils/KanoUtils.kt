@@ -388,20 +388,36 @@ class KanoUtils {
                 ?: throw Exception("复制 sendat 到 filesDir 失败")
             outFileAt.setExecutable(true)
 
-            val atCommand = "${outFileAt.absolutePath} -n $slot -c '${command.trim()}'"
-            val result = ShellKano.runShellCommand(atCommand, true)
-                ?: throw Exception("AT 指令没有输出")
+            val escapedCommand = command.trim().replace("'", "'\\''")
+            val atCommand = "'${outFileAt.absolutePath}' -n $slot -c '$escapedCommand'"
+            val result = if (U20PlatformAdapter.isNewU20()) {
+                U20PlatformAdapter.ensureRootBackend(context).getOrElse {
+                    throw Exception("新版 U20 root 后端不可用: ${it.message}")
+                }
+                val socketPath = File(context.filesDir, "kano_root_shell.sock")
+                RootShell.sendCommandToSocket(atCommand, socketPath.absolutePath)
+                    ?: throw Exception("AT 指令没有输出")
+            } else {
+                ShellKano.runShellCommand(atCommand, true)
+                    ?: throw Exception("AT 指令没有输出")
+            }
             var res = result
-                .replace("\"", "\\\"") // 转义引号
                 .replace("\n", "")
                 .replace("\r", "")
-                .trimStart()
+                .trim()
+
+            // MN901's log-control binder occasionally prepends one or two
+            // parcel-decoding bytes (for example `G+SPLBAND` or `\"CGMI`).
+            // Keep runAT's return value raw; JSON escaping belongs to the HTTP
+            // response encoder, not this transport layer.
+            val plusIndex = res.indexOf('+')
+            if (plusIndex in 1..2) {
+                res = res.substring(plusIndex)
+            }
+            res = res.trimStart('\\', '"', ',').trimStart()
 
             if (res.lowercase().endsWith("ok")) {
                 res = res.dropLast(2).trimEnd() + " OK"
-            }
-            if (res.startsWith(",")) {
-                res = res.removePrefix(",").trimStart()
             }
             return res
         }

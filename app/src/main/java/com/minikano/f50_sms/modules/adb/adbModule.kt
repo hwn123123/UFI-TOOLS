@@ -1,12 +1,14 @@
 package com.minikano.f50_sms.modules.adb
 
 import android.content.Context
+import android.provider.Settings
 import com.minikano.f50_sms.ADBService
 import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.modules.BASE_TAG
 import com.minikano.f50_sms.modules.PREFS_NAME
 import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.utils.ShellKano.Companion
+import com.minikano.f50_sms.utils.U20PlatformAdapter
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -148,6 +150,17 @@ fun Route.adbModule(context: Context) {
 
     //网络ADB启动状态
     get("/api/adb_alive") {
+        if (U20PlatformAdapter.isNewU20()) {
+            val isAlive =
+                Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) == 1
+            call.response.headers.append("Access-Control-Allow-Origin", "*")
+            call.respondText(
+                JSONObject().put("result", isAlive.toString()).toString(),
+                ContentType.Application.Json,
+                HttpStatusCode.OK
+            )
+            return@get
+        }
         call.response.headers.append("Access-Control-Allow-Origin", "*")
         call.respondText(
             """{"result":"${ADBService.adbIsReady}"}""".trimIndent(),

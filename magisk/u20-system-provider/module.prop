@@ -1,0 +1,6 @@
+id=u20-system-provider
+name=U20 Telephony Provider Bridge
+version=1.4
+versionCode=5
+author=ningge
+description=Expose UFI-TOOLS telephony compatibility providers as a system app on FM_U20/MN901.

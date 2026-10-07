@@ -39,7 +39,7 @@ const originFetch = window.fetch;
         if (input.startsWith('/api/proxy')) {
             let _token = common_headers.authorization
             if (!_token) {
-                _token = localStorage.getItem('kano_sms_token')
+                _token = sessionStorage.getItem('kano_sms_token')
             }
             if (_token) {
                 headers.set('authorization', _token)
@@ -85,7 +85,14 @@ const requestIsLogin = async () => {
             ...common_headers,
         }
     })
-    return await res.json()
+    const responseText = await res.text()
+    if (!responseText.trim()) return {}
+    try {
+        return JSON.parse(responseText)
+    } catch (error) {
+        console.warn('设备接口返回了非 JSON 数据:', error)
+        return {}
+    }
 }
 
 const getCookieFromUFI = async () => {
@@ -328,7 +335,14 @@ const getData = async (data = new URLSearchParams({})) => {
             "Content-Type": "application/x-www-form-urlencoded",
         },
     }, 5000)
-    return await res.json()
+    const responseText = await res.text()
+    if (!responseText.trim()) return {}
+    try {
+        return JSON.parse(responseText)
+    } catch (error) {
+        console.warn('设备接口返回了非 JSON 数据:', error)
+        return {}
+    }
 }
 
 const reboot = async (cookie) => {
@@ -414,7 +428,7 @@ const getUFIData = async () => {
         const params = new URLSearchParams();
         params.append('_', Date.now().toString());
 
-        const cmd = 'usb_port_switch,battery_charging,sms_received_flag,sms_unread_num,sms_sim_unread_num,sim_msisdn,dual_sim_support,sim_slot,data_volume_limit_switch,battery_value,battery_vol_percent,network_signalbar,network_rssi,cr_version,iccid,imei,imsi,ipv6_wan_ipaddr,lan_ipaddr,mac_address,msisdn,network_information,Lte_ca_status,rssi,Z5g_rsrp,lte_rsrp,wifi_access_sta_num,loginfo,data_volume_alert_percent,data_volume_limit_size,realtime_rx_thrpt,realtime_tx_thrpt,realtime_time,monthly_tx_bytes,monthly_rx_bytes,monthly_time,network_type,network_provider,ppp_status';
+        const cmd = 'usb_port_switch,battery_charging,sms_received_flag,sms_unread_num,sms_sim_unread_num,sim_msisdn,dual_sim_support,sim_slot,sim_status,data_volume_limit_switch,battery_value,battery_vol_percent,network_signalbar,network_rssi,cr_version,iccid,imei,imsi,ipv6_wan_ipaddr,lan_ipaddr,mac_address,msisdn,network_information,Lte_ca_status,rssi,Z5g_rsrp,Nr_snr,nr_rsrq,Nr_bands,Nr_fcn,Nr_pci,Nr_cell_id,lte_rsrp,Lte_snr,lte_rsrq,Lte_bands,Lte_fcn,Lte_pci,Lte_cell_id,wifi_access_sta_num,loginfo,data_volume_alert_percent,data_volume_limit_size,realtime_rx_thrpt,realtime_tx_thrpt,realtime_time,monthly_tx_bytes,monthly_rx_bytes,monthly_time,network_type,network_provider,ppp_status';
 
         const res = await fetch(`${KANO_baseURL}/goform/goform_get_cmd_process?multi_data=1&isTest=false&cmd=${cmd}&${params.toString()}`, {
             headers: {

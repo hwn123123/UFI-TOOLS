@@ -1,0 +1,3 @@
+# FM_U20/MN901 has no ALSA sound card. The factory "whale" HAL advertises
+# speaker/microphone ports that do not exist and retries listAudioPorts forever.
+ro.hardware.audio.primary=default

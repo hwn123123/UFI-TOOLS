@@ -33,6 +33,7 @@ import com.minikano.f50_sms.utils.ShellKano
 import com.minikano.f50_sms.utils.ShellKano.Companion.executeShellFromAssetsSubfolderWithArgs
 import com.minikano.f50_sms.utils.ShellKano.Companion.killProcessByName
 import com.minikano.f50_sms.utils.SmbThrottledRunner
+import com.minikano.f50_sms.utils.U20PlatformAdapter
 import com.minikano.f50_sms.utils.SmsInfo
 import com.minikano.f50_sms.utils.SmsPoll
 import com.minikano.f50_sms.utils.TaskSchedulerManager
@@ -115,8 +116,15 @@ class ADBService : Service() {
         handler.post {
             resetFilesFromAssets(applicationContext)
 
-            // 等文件拷贝完成后再继续
-            startAdbKeepAliveTask(applicationContext)
+            // Android 13 on the MN901 forbids executing a binary copied into an
+            // app-private directory. The stock adbd is already persistent on
+            // this model and privileged work uses the Magisk socket, so the
+            // bundled adb client would only create a denial every retry cycle.
+            if (U20PlatformAdapter.isNewU20()) {
+                updateAdbReady(false, "FM_U20 uses the native adbd/root backend")
+            } else {
+                startAdbKeepAliveTask(applicationContext)
+            }
             startIperfTask(applicationContext)
 
             handler.post(runnableSMSAndDataFlowCheck)

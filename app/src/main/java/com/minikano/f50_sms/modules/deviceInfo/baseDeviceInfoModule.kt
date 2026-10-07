@@ -8,6 +8,7 @@ import com.minikano.f50_sms.modules.PREFS_NAME
 import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.utils.KanoUtils
 import com.minikano.f50_sms.utils.UniqueDeviceIDManager
+import com.minikano.f50_sms.utils.U20PlatformAdapter
 import com.minikano.f50_sms.utils.getCpuUsageSnapshot
 import com.minikano.f50_sms.utils.getCpuFreqJson
 import com.minikano.f50_sms.utils.getMemoryUsageSnapshot
@@ -15,6 +16,7 @@ import com.minikano.f50_sms.utils.initializeDeviceInfoSources
 import com.minikano.f50_sms.utils.readBatteryStatus
 import com.minikano.f50_sms.utils.readThermalZones
 import com.minikano.f50_sms.utils.readUsbDevices
+import com.minikano.f50_sms.utils.readU20SystemStats
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -35,7 +37,8 @@ data class MyStorageInfo(
 
 fun Route.baseDeviceInfoModule(context: Context) {
     val TAG = "[$BASE_TAG]_baseDeviceInfoModule"
-    initializeDeviceInfoSources()
+    val isU20 = U20PlatformAdapter.isNewU20()
+    if (!isU20) initializeDeviceInfoSources()
 
     get("/api/baseDeviceInfo") {
         //客户端IP
@@ -58,16 +61,17 @@ fun Route.baseDeviceInfoModule(context: Context) {
         //cpu温度
         var cpuTempRes: String? = null
         var cpuTempMax:String? = null
-        try {
-            val (maxTemp,temp) = readThermalZones()
-            cpuTempMax = maxTemp.toString()
-            KanoLog.d(TAG, "获取CPU温度成功: $temp")
-            cpuTempRes = temp
-            cpuTempRes = cpuTempRes.replace("\n", "")
-
-        } catch (e: Exception) {
-            KanoLog.d(TAG, "获取CPU温度出错： ${e.message}")
-            cpuTempRes = null
+        if (!isU20) {
+            try {
+                val (maxTemp,temp) = readThermalZones()
+                cpuTempMax = maxTemp.toString()
+                KanoLog.d(TAG, "获取CPU温度成功: $temp")
+                cpuTempRes = temp
+                cpuTempRes = cpuTempRes.replace("\n", "")
+            } catch (e: Exception) {
+                KanoLog.d(TAG, "获取CPU温度出错： ${e.message}")
+                cpuTempRes = null
+            }
         }
 
         //cpu 内存信息
@@ -76,27 +80,64 @@ fun Route.baseDeviceInfoModule(context: Context) {
         var memInfo: String? = null
         var cpuUsageRes: Double? = null
         var memUsageRes: Double? = null
+        var networkInterfaceRes = ""
+        var realtimeRxThroughputRes = 0L
+        var realtimeTxThroughputRes = 0L
+        var wifiRealtimeRxThroughputRes = 0L
+        var wifiRealtimeTxThroughputRes = 0L
+        var networkRxBytesRes = 0L
+        var networkTxBytesRes = 0L
+        var networkSampleTimeRes = 0L
 
-        try {
-            val usageSnapshot = getCpuUsageSnapshot()
-            val freq = getCpuFreqJson()
-            val memorySnapshot = getMemoryUsageSnapshot()
-            val usage = usageSnapshot.json
-            val mem = memorySnapshot.json
+        if (!isU20) {
+            try {
+                val usageSnapshot = getCpuUsageSnapshot()
+                val freq = getCpuFreqJson()
+                val memorySnapshot = getMemoryUsageSnapshot()
+                val usage = usageSnapshot.json
+                val mem = memorySnapshot.json
 
-            KanoLog.d(TAG, "CPU频率数据：${freq}")
-            KanoLog.d(TAG, "CPU使用数据：${usage}")
-            KanoLog.d(TAG, "Mem使用数据：${mem}")
-            cpuUsageRes = usageSnapshot.overallUsage
-            memUsageRes = memorySnapshot.usagePercent
-            cpuFreqInfo = freq
-            cpuUsageInfo = usage
-            memInfo = mem
-        } catch (e: Exception) {
-            cpuFreqInfo = null
-            cpuUsageInfo = null
-            memInfo = null
-            KanoLog.d(TAG, "获取cpu内存信息出错： ${e.message}")
+                KanoLog.d(TAG, "CPU频率数据：${freq}")
+                KanoLog.d(TAG, "CPU使用数据：${usage}")
+                KanoLog.d(TAG, "Mem使用数据：${mem}")
+                cpuUsageRes = usageSnapshot.overallUsage
+                memUsageRes = memorySnapshot.usagePercent
+                cpuFreqInfo = freq
+                cpuUsageInfo = usage
+                memInfo = mem
+            } catch (e: Exception) {
+                cpuFreqInfo = null
+                cpuUsageInfo = null
+                memInfo = null
+                KanoLog.d(TAG, "获取cpu内存信息出错： ${e.message}")
+            }
+        }
+
+        // Android 13 on MN901 denies an ordinary app direct access to parts of
+        // procfs/sysfs. Read the same counters through the private root socket.
+        var u20Stats: com.minikano.f50_sms.utils.U20SystemStats? = null
+        if (isU20) {
+            try {
+                val stats = readU20SystemStats(context)
+                u20Stats = stats
+                cpuUsageRes = stats.cpuUsage
+                memUsageRes = stats.memoryUsage
+                cpuFreqInfo = stats.cpuFrequencyInfo.toString()
+                cpuUsageInfo = stats.cpuUsageInfo.toString()
+                memInfo = stats.memoryInfo.toString()
+                cpuTempRes = stats.thermalZones.toString()
+                cpuTempMax = stats.maxTemperature.toString()
+                networkInterfaceRes = stats.networkInterface
+                realtimeRxThroughputRes = stats.networkRxBytesPerSecond
+                realtimeTxThroughputRes = stats.networkTxBytesPerSecond
+                wifiRealtimeRxThroughputRes = stats.wifiRxBytesPerSecond
+                wifiRealtimeTxThroughputRes = stats.wifiTxBytesPerSecond
+                networkRxBytesRes = stats.networkRxBytes
+                networkTxBytesRes = stats.networkTxBytes
+                networkSampleTimeRes = stats.networkSampleTime
+            } catch (e: Exception) {
+                KanoLog.d(TAG, "获取 FM_U20 root 系统信息出错：${e.message}")
+            }
         }
 
         //存储与日流量获取
@@ -159,9 +200,14 @@ fun Route.baseDeviceInfoModule(context: Context) {
         var votageNow :Int? = null
         try {
             val batteryLevel: Int = KanoUtils.getBatteryPercentage(context)
-            val batteryStatus = readBatteryStatus()
-            currentNow = batteryStatus.current_uA
-            votageNow = batteryStatus.voltage_uV
+            if (isU20) {
+                currentNow = u20Stats?.batteryCurrentUa ?: -1
+                votageNow = u20Stats?.batteryVoltageUv ?: -1
+            } else {
+                val batteryStatus = readBatteryStatus()
+                currentNow = batteryStatus.current_uA
+                votageNow = batteryStatus.voltage_uV
+            }
 
             KanoLog.d(TAG, "型号与电量：${AppMeta.model} $batteryLevel")
 
@@ -202,6 +248,14 @@ fun Route.baseDeviceInfoModule(context: Context) {
                 "cpuFreqInfo":$cpuFreqInfo,
                 "cpuUsageInfo":$cpuUsageInfo,
                 "memInfo":$memInfo,
+                "network_interface":"$networkInterfaceRes",
+                "network_rx_bytes":$networkRxBytesRes,
+                "network_tx_bytes":$networkTxBytesRes,
+                "realtime_rx_thrpt":$realtimeRxThroughputRes,
+                "realtime_tx_thrpt":$realtimeTxThroughputRes,
+                "wifi_realtime_rx_thrpt":$wifiRealtimeRxThroughputRes,
+                "wifi_realtime_tx_thrpt":$wifiRealtimeTxThroughputRes,
+                "network_sample_time":$networkSampleTimeRes,
                 "current_now":$currentNow,
                 "voltage_now":$votageNow,
                 "is_reached_data_flow_limit":${AppMeta.isReachedDataFlowLimit},
@@ -367,7 +421,13 @@ fun Route.baseDeviceInfoModule(context: Context) {
     //SELinux状态
     get("/api/SELinux"){
         try {
-            val res = KanoUtils.getSELinuxStatus()
+            val res = if (U20PlatformAdapter.isNewU20()) {
+                U20PlatformAdapter.runRootCommand(context, "getenforce")
+                    .getOrDefault("Unknown")
+                    .trim()
+            } else {
+                KanoUtils.getSELinuxStatus()
+            }
             val jsonResult = """
             {
                 "selinux": "$res"

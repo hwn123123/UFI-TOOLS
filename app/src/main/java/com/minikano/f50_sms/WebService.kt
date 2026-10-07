@@ -14,10 +14,13 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.minikano.f50_sms.configs.AppMeta
+import com.minikano.f50_sms.modules.u20.U20WifiClientAdapter
 import com.minikano.f50_sms.utils.KanoLog
 import com.minikano.f50_sms.utils.KanoUtils
 import com.minikano.f50_sms.utils.UniqueDeviceIDManager
+import com.minikano.f50_sms.utils.U20PlatformAdapter
 import com.minikano.f50_sms.utils.WakeLock
+import kotlinx.coroutines.runBlocking
 import kotlin.concurrent.thread
 
 class WebService : Service() {
@@ -29,6 +32,8 @@ class WebService : Service() {
     @Volatile
     private var allowAutoStart = true
     private var allowAutoReStart = true
+    @Volatile
+    private var u20PolicyKeeperRunning = false
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -51,6 +56,20 @@ class WebService : Service() {
         // Application 或 Activity 启动时调用一次初始化：
         UniqueDeviceIDManager.init(this)
         startForegroundNotification()
+
+        // 新版 U20 的飞猫后台运行在设备自身 8080 端口，不能使用 F50 的网关自动探测。
+        U20PlatformAdapter.configureLocalGateway(applicationContext)
+
+        // 新版 FM_U20 没有 F50 的 Samba 提权入口，改用 Magisk 启动受限制的 root socket。
+        if (U20PlatformAdapter.isNewU20()) {
+            thread(name = "u20-root-backend") {
+                U20PlatformAdapter.ensureRootBackend(applicationContext)
+                    .onSuccess { KanoLog.d("UFI_TOOLS_U20", it) }
+                    .onFailure { KanoLog.e("UFI_TOOLS_U20", "root backend: ${it.message}") }
+                AppMeta.init(applicationContext)
+                startU20PolicyKeeper()
+            }
+        }
 
         // Base PARTIAL_WAKE_LOCK 只由承载 Ktor 的核心服务持有。
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -81,6 +100,29 @@ class WebService : Service() {
     }
 
     private val serverLock = Any()
+
+    private fun startU20PolicyKeeper() {
+        if (u20PolicyKeeperRunning) return
+        u20PolicyKeeperRunning = true
+        thread(name = "u20-wifi-policy") {
+            var resetCache = true
+            while (u20PolicyKeeperRunning) {
+                runCatching {
+                    runBlocking {
+                        U20WifiClientAdapter.maintainPolicies(applicationContext, resetCache)
+                    }
+                    resetCache = false
+                }.onFailure {
+                    KanoLog.e("UFI_TOOLS_U20", "Wi-Fi policy restore: ${it.message}")
+                }
+                try {
+                    Thread.sleep(15_000)
+                } catch (_: InterruptedException) {
+                    break
+                }
+            }
+        }
+    }
 
     private fun startWebServer() {
         val prefs = getSharedPreferences("kano_ZTE_store", Context.MODE_PRIVATE)
@@ -133,6 +175,7 @@ class WebService : Service() {
     }
 
     override fun onDestroy() {
+        u20PolicyKeeperRunning = false
         unregisterReceiver(statusReceiver)
         stopWebServer()
         WakeLock.releaseBaseWakeLock()

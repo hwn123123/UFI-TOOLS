@@ -3,6 +3,7 @@ package com.minikano.f50_sms.modules
 import android.content.Context
 import com.minikano.f50_sms.utils.KanoLog
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.defaultForFilePath
 import io.ktor.server.application.call
@@ -33,6 +34,10 @@ fun Route.staticFileModule(context: Context) {
         try {
             val bytes = context.assets.open(path).use { it.readBytes() }
             val contentType = ContentType.defaultForFilePath(path)
+            // The web UI is bundled in the APK. Reusing an old main.js after
+            // an in-place APK update can leave the page and backend out of
+            // sync, so always revalidate bundled assets.
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store, no-cache, must-revalidate")
             call.respondBytes(bytes, contentType)
         } catch (e: SecurityException) {
             KanoLog.e(TAG, "静态资源无权限访问：$path", e)

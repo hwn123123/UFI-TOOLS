@@ -42,6 +42,18 @@ let QORS_MESSAGE = null
 let smsSender = null
 let psw_fail_num = 0;
 
+// 登录凭据只保留在当前浏览器会话。旧版本曾持久保存，升级后主动清理。
+localStorage.removeItem('kano_sms_pwd')
+localStorage.removeItem('kano_sms_token')
+localStorage.removeItem('kano_remembered_loginfo')
+window.UFI_AUTHENTICATED = false
+const notifyAuthState = (loggedIn) => {
+    window.UFI_AUTHENTICATED = Boolean(loggedIn)
+    window.dispatchEvent(new CustomEvent('ufi-auth-changed', {
+        detail: { loggedIn: window.UFI_AUTHENTICATED }
+    }))
+}
+
 // 初始化全局数据代理对象
 window.UFI_DATA = new Proxy({}, {
     set(target, prop, value) {
@@ -53,6 +65,10 @@ window.UFI_DATA = new Proxy({}, {
 
 //customHead
 (() => {
+    const sessionToken = sessionStorage.getItem('kano_sms_token')
+    if (!sessionToken) return
+    KANO_TOKEN = sessionToken
+    common_headers.authorization = sessionToken
     getCustomHead().then((head_text) => {
         if (head_text) {
             try {
@@ -512,15 +528,14 @@ function main_func() {
             toastTimer = createTimer()
             await needToken()
             toastTimer && clearTimeout(toastTimer)
-            let tokenInput = document.querySelector('#TOKEN')
+            let usernameInput = document.querySelector('#U20_USERNAME')
             let pwdInput = document.querySelector('#PWDINPUT')
-            let token = tokenInput && (tokenInput.value)
+            let username = usernameInput && usernameInput.value.trim()
+            const token = 'admin'
             let password = pwdInput && (pwdInput.value)
+            if (username !== 'admin') return createToast('账号错误，请输入 admin', 'red')
             if (!password || !password?.trim()) return createToast(t('toast_please_input_pwd'), 'red')
             KANO_PASSWORD = password.trim()
-            if (isNeedToken) {
-                if (!token || !token?.trim()) return createToast(t('toast_please_input_token'), 'red')
-            }
             KANO_TOKEN = SHA256(token.trim()).toLowerCase()
             common_headers.authorization = KANO_TOKEN
 
@@ -574,22 +589,12 @@ function main_func() {
                 console.error('Update admin password failed:', update_res ? update_res.message : 'No response');
             }
             createToast(t('toast_login_success'), 'green')
-            localStorage.setItem('kano_sms_pwd', password.trim())
-            localStorage.setItem('kano_sms_token', SHA256(token.trim()).toLowerCase())
+            sessionStorage.setItem('kano_sms_pwd', password.trim())
+            sessionStorage.setItem('kano_sms_token', SHA256(token.trim()).toLowerCase())
             closeModal('#tokenModal')
             initRenderMethod()
             initMessage()
-            //记住密码
-            const loginRememberMe = document.querySelector('#loginRememberMe')
-            if (loginRememberMe && loginRememberMe.checked) {
-                //AES加密存储密码
-                if (CryptoJS) {
-                    const payload = CryptoJS.AES.encrypt(`${password.trim()}<kano_CryptoJS_split>${token.trim()}`, 'kano_secret_key_1145141919810721')
-                    localStorage.setItem('kano_remembered_loginfo', payload)
-                }
-            } else if (loginRememberMe && !loginRememberMe.checked) {
-                localStorage.removeItem('kano_remembered_loginfo')
-            }
+            notifyAuthState(true)
         }
         catch (e) {
             toastTimer && clearTimeout(toastTimer)
@@ -600,8 +605,9 @@ function main_func() {
     let timer_out = null
     function out() {
         smsSender && smsSender()
-        localStorage.removeItem('kano_sms_pwd')
-        localStorage.removeItem('kano_sms_token')
+        sessionStorage.removeItem('kano_sms_pwd')
+        sessionStorage.removeItem('kano_sms_token')
+        notifyAuthState(false)
         closeModal('#smsList')
         clearTimeout(timer_out)
         timer_out = setTimeout(() => {
@@ -610,8 +616,8 @@ function main_func() {
     }
 
     let initRequestData = async () => {
-        const PWD = localStorage.getItem('kano_sms_pwd')
-        const TOKEN = localStorage.getItem('kano_sms_token')
+        const PWD = sessionStorage.getItem('kano_sms_pwd')
+        const TOKEN = sessionStorage.getItem('kano_sms_token')
         if (!PWD) {
             return false
         }
@@ -758,7 +764,6 @@ function main_func() {
         if (isFirstRender) {
             list.innerHTML = ` <li><h2 style="padding: 30px;text-align:center;height:100vh">Loading...</h2></li>`
         }
-        showModal('#smsList')
         let res = null
         try {
             res = await getSms()
@@ -768,10 +773,7 @@ function main_func() {
         if (res && (res.length > 0)) {
             cachedSmsRes = safeClone(res)
         } else {
-            if (isFirstRender == true) {
-                return
-            }
-            res = cachedSmsRes
+            res = Array.isArray(res) ? res : cachedSmsRes
         }
         if (res && (res.length > 0)) {
             //防止重复渲染
@@ -864,9 +866,10 @@ function main_func() {
     let status_login_try_times = 0
     let data_limit_toast_shown = false
     let handlerStatusRender = async (flag = false) => {
+        if (!(await initRequestData())) return false
         const status = document.querySelector('#STATUS')
         if (flag) {
-            const TOKEN = localStorage.getItem('kano_sms_token')
+            const TOKEN = sessionStorage.getItem('kano_sms_token')
             if (!TOKEN && isNeedToken) {
                 return false
             }
@@ -919,8 +922,9 @@ function main_func() {
                             out()
                             isFirstRender = true
                             lastRequestSmsIds = null
-                            localStorage.removeItem('kano_sms_pwd')
-                            localStorage.removeItem('kano_sms_token')
+                            sessionStorage.removeItem('kano_sms_pwd')
+                            sessionStorage.removeItem('kano_sms_token')
+                            notifyAuthState(false)
                             KANO_TOKEN = null
                             common_headers.authorization = null
                             initRenderMethod()
@@ -1083,11 +1087,23 @@ function main_func() {
             html += `<div class="title" style="margin: 6px 0;"><b>${t('signal_params')}</b></div>`
 
             html += `<li style="padding-top: 15px;"><p>`
+            let visibleSignalCount = 0
             showList.signalShowList.forEach(item => {
                 if (statusHtml_net[item.name] && item.isShow) {
                     html += statusHtml_net[item.name]
+                    visibleSignalCount++
                 }
             })
+            if (visibleSignalCount === 0) {
+                const simStatus = String(res.sim_status || '').toLowerCase()
+                const simLabel = simStatus === 'absent' ? '未插卡' : '未获取到信号'
+                html += `<strong class="green">SIM：${simLabel}</strong>`
+                html += `<strong class="blue">RSRP：--</strong>`
+                html += `<strong class="blue">RSRQ：--</strong>`
+                html += `<strong class="blue">SINR：--</strong>`
+                html += `<strong class="blue">Band：--</strong>`
+                html += `<strong class="blue">PCI：--</strong>`
+            }
             html += `</p></li>`
             html += `<div class="title" style="margin: 6px 0;"><b>${t('device_props')}</b></div>`
 
@@ -1250,6 +1266,7 @@ function main_func() {
         if (!(await initRequestData())) {
             showModal('#tokenModal')
         } else {
+            showModal('#smsList')
             isFirstRender = true
             lastRequestSmsIds = null
             handleSmsRender()
@@ -1263,47 +1280,28 @@ function main_func() {
 
     let clearBtn = document.querySelector('#CLEAR')
     clearBtn.onclick = async () => {
+        // Log out the vendor session while the current UFI authorization is
+        // still valid. Promise.finally never receives the resolved cookie;
+        // the old login().finally(cookie => logout(cookie)) call therefore
+        // sent an unauthenticated request and raised a JSON parsing error.
+        try {
+            if (KANO_COOKIE) await logout(KANO_COOKIE)
+        } catch { }
         isFirstRender = true
         lastRequestSmsIds = null
-        localStorage.removeItem('kano_sms_pwd')
-        localStorage.removeItem('kano_sms_token')
+        sessionStorage.removeItem('kano_sms_pwd')
+        sessionStorage.removeItem('kano_sms_token')
+        notifyAuthState(false)
         KANO_TOKEN = null
         common_headers.authorization = null
         initRenderMethod()
-        //退出登录请求
-        try {
-            login().finally(cookie => {
-                logout(cookie)
-            })
-        } catch { }
         await needToken()
         const label = document.querySelector("#token_div_label2")
         const tokenEl = document.querySelector("#PWD_BLK")
         const pwdEl = document.querySelector("#PWDINPUT")
         const tokenInput = document.querySelector("#TOKEN")
-        label.style.display = ""
-        tokenEl.style.display = "flex"
-        //填充密码
-        if (CryptoJS) {
-            const str = localStorage.getItem('kano_remembered_loginfo')
-            if (str) {
-                try {
-                    const bytes = CryptoJS.AES.decrypt(str, 'kano_secret_key_1145141919810721')
-                    const originalText = bytes.toString(CryptoJS.enc.Utf8)
-                    const [remembered_password, remembered_token] = originalText.split('<kano_CryptoJS_split>')
-                    if (remembered_password && remembered_token) {
-                        pwdEl.value = remembered_password
-                        tokenInput.value = remembered_token
-                        const loginRememberMe = document.querySelector('#loginRememberMe')
-                        if (loginRememberMe) {
-                            loginRememberMe.checked = true
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error decrypting remembered login info:', e)
-                }
-            }
-        }
+        label && (label.style.display = "")
+        tokenEl && (tokenEl.style.display = "flex")
         if (pwdEl && pwdEl.value.trim() == "Wa@9w+YWRtaW4=") {
             const loginMethodEl = document.querySelector("#login_method")
             console.log("Admin login method detected, switch to password input")
@@ -1837,6 +1835,7 @@ function main_func() {
 
     //锁基站
     let initCellInfo = async (onlyRefreshLockedInfoList = false) => {
+        if (!(await initRequestData())) return
         try {
             //已锁基站信息
             //基站信息
@@ -2064,8 +2063,9 @@ function main_func() {
     rebootDeviceBtnInit()
 
     //字段显示隐藏
-    document.querySelector("#DICTIONARY").onclick = (e) => {
-        showModal('#dictionaryModal')
+    const dictionaryButton = document.querySelector("#DICTIONARY")
+    if (dictionaryButton) {
+        dictionaryButton.onclick = () => showModal('#dictionaryModal')
     }
 
     document.querySelector('#DIC_LIST')?.addEventListener('click', (e) => {
@@ -2398,16 +2398,20 @@ function main_func() {
                         ApBroadcastDisabledEl && (ApBroadcastDisabledEl.checked = item.ApBroadcastDisabled.toString() == '0')
                         SSIDEl && (SSIDEl.value = item.SSID)
                         // 二维码
-                        fetch(KANO_baseURL + item.QrImageUrl, {
-                            headers: common_headers
-                        }).then(async (res) => {
-                            const blob = await res.blob();
-                            const objectURL = URL.createObjectURL(blob);
-                            QRCodeImg.onload = () => {
-                                URL.revokeObjectURL(objectURL);
-                            };
-                            QRCodeImg.src = objectURL;
-                        });
+                        if (item.QrImageUrl) {
+                            fetch(KANO_baseURL + item.QrImageUrl, {
+                                headers: common_headers
+                            }).then(async (res) => {
+                                const blob = await res.blob();
+                                const objectURL = URL.createObjectURL(blob);
+                                QRCodeImg.onload = () => {
+                                    URL.revokeObjectURL(objectURL);
+                                };
+                                QRCodeImg.src = objectURL;
+                            });
+                        } else if (QRCodeImg) {
+                            QRCodeImg.removeAttribute('src');
+                        }
                         const WIFI_FORM_SHOWABLE = document.querySelector('#WIFI_FORM_SHOWABLE')
                         AuthModeEl.value = item.AuthMode
                         AuthModeEl.selected = item.AuthMode
@@ -3111,6 +3115,7 @@ function main_func() {
 
     // 启用TTYD（如果有）
     let initTTYD = async () => {
+        if (!(await initRequestData())) return
         const TTYD = document.querySelector('#TTYD')
         if (!TTYD) return
         const list = TTYD.querySelector('.deviceList')
@@ -3243,6 +3248,10 @@ function main_func() {
 
     async function QOSRDPCommand(cmd) {
         if (!cmd) return QORS_MESSAGE = null
+        if (!(await initRequestData())) return QORS_MESSAGE = null
+        if (UFI_DATA && (UFI_DATA.model == "FM_U20" || UFI_DATA.model == "MN901")) {
+            return QORS_MESSAGE = null
+        }
         let sim_slot = null
         // 获取当前卡槽
         if (UFI_DATA && UFI_DATA.sim_slot != undefined && UFI_DATA.sim_slot != null && UFI_DATA.sim_slot != '') {
@@ -3291,6 +3300,7 @@ function main_func() {
 
         let res = await executeATCommand(cmd, sim_slot)
         //如果是单卡用户，0槽位又获取不到数据，那就尝试1槽位
+        if (!res) return QORS_MESSAGE = null
         if (res.result && res.result.includes('ERROR')) {
             if (dual_sim_support != '1') {
                 sim_slot = 1
@@ -3514,6 +3524,7 @@ function main_func() {
     }
 
     const socatAlive = async () => {
+        if (!(await initRequestData())) return
         let res = await checkAdvancedFunc()
         if (res) {
             let smb = document.querySelector('#SMB')
@@ -3654,7 +3665,7 @@ function main_func() {
                         console.error('Update admin password failed:', update_res ? update_res.message : 'No response');
                     }
                     KANO_PASSWORD = newPassword.trim()
-                    localStorage.setItem('kano_sms_pwd', newPassword.trim())
+                    sessionStorage.setItem('kano_sms_pwd', newPassword.trim())
                     closeModal('#changePassModal')
                 } else {
                     throw t('toast_change_failed')
@@ -3717,7 +3728,7 @@ function main_func() {
                     const new_token = SHA256(newToken.trim()).toLowerCase()
                     KANO_TOKEN = new_token
                     common_headers.authorization = KANO_TOKEN
-                    localStorage.setItem('kano_sms_token', new_token)
+                    sessionStorage.setItem('kano_sms_token', new_token)
                     form.reset()
                     const md = createModal({
                         name: "kano_token_confirm",
@@ -4140,14 +4151,7 @@ function main_func() {
         }
     }
 
-    //打赏模态框设置
-    const payModalState = localStorage.getItem('hidePayAndGroupModal') || false
-    !payModalState && window.addEventListener('load', () => {
-        setTimeout(() => {
-            showModal('#payModal')
-        }, 300);
-    })
-
+    // U20 适配版的赞赏码固定显示在“系统工具 → 支持开发”，不再启动弹窗。
     const onClosePayModal = () => {
         closeModal('#payModal')
         localStorage.setItem('hidePayAndGroupModal', 'true')
@@ -4476,6 +4480,7 @@ function main_func() {
 
     //adb轮询
     const adbQuery = async () => {
+        if (!(await initRequestData())) return
         try {
             const adb_status = await adbKeepAlive()
             const adb_text = adb_status ? `${t('network_adb_status')}：🟢 ${t('adb_status_active')}` : `${t('network_adb_status')}：🟡 ${t('adb_status_waiting')}`
@@ -6822,9 +6827,16 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
 
     const getSELinuxStatus = async () => {
         try {
-            const res = await (await fetchWithTimeout(`${KANO_baseURL}/SELinux`)).json()
-            let result = res.selinux.toLowerCase()
-            if (result !== "permissive" && result !== "disabled" && result != "0") {
+            const [res, deviceInfo] = await Promise.all([
+                (await fetchWithTimeout(`${KANO_baseURL}/SELinux`)).json(),
+                (await fetchWithTimeout(`${KANO_baseURL}/version_info`)).json()
+            ])
+            const model = String(deviceInfo.model || '').toUpperCase()
+            const isNativeU20 = model === 'FM_U20' || model.includes('MN901')
+            let result = String(res.selinux || '').toLowerCase()
+            // The native FM_U20 adapter runs privileged operations through its
+            // Magisk root bridge and is designed to keep SELinux enforcing.
+            if (!isNativeU20 && result !== "permissive" && result !== "disabled" && result != "0") {
                 createToast(t('not_support_firmware'), "pink", 10000);
             }
         } catch {
@@ -6889,6 +6901,9 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
     initTerms()
 
     const initCheckWeakToken = async () => {
+        // U20 适配版的 UFI 授权口令由应用内部管理，不再作为用户登录字段。
+        // 用户只使用原厂设备账号和密码，因此不显示上游的“弱 UFI 口令”提示。
+        return null
         if (!(await initRequestData())) {
             return null
         }
@@ -8552,5 +8567,31 @@ echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu3/online
         const savedLang = localStorage.getItem(LANG_STORAGE_KEY);
         const langToLoad = savedLang || detectBrowserLang();
         loadLanguage(langToLoad);
+    })()
+
+    // 页面刷新后恢复现有登录状态并完成一次完整初始化。
+    // 原逻辑只恢复了密码/令牌，导致页面看似已进入、按钮却仍按未登录处理。
+    ;(async () => {
+        if (!(await initRequestData())) {
+            showModal('#tokenModal')
+            notifyAuthState(false)
+            return
+        }
+        try {
+            const cookie = await login()
+            if (!cookie) throw new Error('saved login is invalid')
+            closeModal('#tokenModal')
+            await initRenderMethod()
+            initMessage()
+            notifyAuthState(true)
+        } catch (e) {
+            KANO_PASSWORD = null
+            KANO_TOKEN = null
+            common_headers.authorization = null
+            sessionStorage.removeItem('kano_sms_pwd')
+            sessionStorage.removeItem('kano_sms_token')
+            notifyAuthState(false)
+            showModal('#tokenModal')
+        }
     })()
 }

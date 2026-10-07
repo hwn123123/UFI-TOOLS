@@ -1,0 +1,6 @@
+id=u20-runtime-cleanup
+name=U20 Runtime Cleanup
+version=1.0
+versionCode=1
+author=ningge
+description=Use the headless audio HAL and stop unused factory logging and ArmNN services on FM_U20/MN901.
